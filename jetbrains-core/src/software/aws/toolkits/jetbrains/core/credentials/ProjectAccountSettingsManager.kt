@@ -8,11 +8,14 @@ import com.intellij.openapi.components.ServiceManager
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.startup.StartupActivity
 import com.intellij.util.messages.MessageBus
 import com.intellij.util.messages.Topic
 import software.aws.toolkits.core.credentials.CredentialProviderNotFound
+import software.aws.toolkits.core.credentials.ProfileToolkitCredentialsProviderFactory
 import software.aws.toolkits.core.credentials.ToolkitCredentialsProvider
 import software.aws.toolkits.core.region.AwsRegion
+import software.aws.toolkits.core.utils.tryOrNull
 import software.aws.toolkits.jetbrains.core.credentials.ProjectAccountSettingsManager.Companion.ACCOUNT_SETTINGS_CHANGED
 import software.aws.toolkits.jetbrains.core.region.AwsRegionProvider
 import software.aws.toolkits.jetbrains.utils.MRUList
@@ -149,5 +152,18 @@ class DefaultProjectAccountSettingsManager(private val project: Project) :
 
     companion object {
         private const val MAX_HISTORY = 5
+    }
+}
+
+class SelectDefaultAccountActivity : StartupActivity {
+    override fun runActivity(project: Project) {
+        val accountSettingsManager = ProjectAccountSettingsManager.getInstance(project)
+        try {
+            accountSettingsManager.activeCredentialProvider
+        } catch (_: CredentialProviderNotFound) {
+            tryOrNull {
+                CredentialManager.getInstance().getCredentialProvider("${ProfileToolkitCredentialsProviderFactory.TYPE}:default")
+            }?.let { accountSettingsManager.activeCredentialProvider = it }
+        }
     }
 }
